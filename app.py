@@ -35,7 +35,7 @@ if uploaded_file:
 st.subheader("📝 오늘 데이터 입력")
 c1, c2 = st.columns(2)
 with c1:
-    cur_price = st.number_input("현재가 (어제 종가 $)", value=0.0, step=0.01, format="%.2f")
+    cur_price = st.number_input("현재가 (프리장/실시간 $)", value=0.0, step=0.01, format="%.2f")
     avg_price = st.number_input("내 평단가 ($)", value=my_avg, step=0.01, format="%.2f")
 with c2:
     qty = st.number_input("보유 수량 (개)", value=my_qty, step=1)
