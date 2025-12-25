@@ -15,10 +15,10 @@ st.sidebar.markdown("---")
 st.sidebar.header("📂 엑셀 파일 업로드")
 uploaded_file = st.sidebar.file_uploader("엑셀(.xlsx)을 올려주세요", type=['xlsx'])
 
-# 변수 초기화 (기본값)
+# 변수 초기화
 default_avg = 0.0
 default_qty = 0
-one_shot_limit = total_capital / split_count  # 1회 매수 금액
+one_shot_limit = total_capital / split_count if split_count > 0 else 0 # 1회 매수 금액
 
 # 엑셀 읽기
 if uploaded_file:
@@ -36,19 +36,17 @@ if uploaded_file:
     except Exception as e:
         st.error(f"엑셀 읽기 실패: {e}")
 
-# --- [2] 현황판 자리를 먼저 찜해둠 (빈칸 만들기) ---
+# --- [2] 현황판 자리를 먼저 찜해둠 ---
 status_container = st.container()
 
-# --- [3] 데이터 입력 (먼저 입력을 받아야 계산을 하니까!) ---
+# --- [3] 데이터 입력 ---
 st.subheader("📝 오늘 데이터 입력")
 
 c1, c2 = st.columns(2)
 with c1:
     cur_price = st.number_input("현재가 (프리장/실시간 $)", value=0.0, step=0.01, format="%.2f")
-    # 여기서 입력받은 값을 'real_avg' 변수에 저장
     real_avg = st.number_input("내 평단가 ($)", value=default_avg, step=0.01, format="%.2f")
 with c2:
-    # 여기서 입력받은 값을 'real_qty' 변수에 저장
     real_qty = st.number_input("보유 수량 (개)", value=default_qty, step=1)
     
     # 매수 수량 자동 제안
@@ -59,23 +57,29 @@ with c2:
         
     buy_cnt = st.number_input("매수 할 수량 (개)", value=calc_buy_qty, step=1)
 
-# --- [4] 이제 찜해둔 자리에 현황판 채워넣기 (실시간 계산) ---
-# 사용자가 입력한 real_avg, real_qty로 계산함!
+# --- [4] 현황판 채워넣기 (회차 기능 추가!) ---
 with status_container:
     used_money = real_avg * real_qty # 현재 투입금
     remain_money = total_capital - used_money # 남은 돈
-    progress_rate = (used_money / total_capital) * 100 if total_capital > 0 else 0 # 진행률
+    
+    # 현재 회차 계산 (투입금 / 1회차금액)
+    current_round = used_money / one_shot_limit if one_shot_limit > 0 else 0
+    progress_pct = (used_money / total_capital) * 100 if total_capital > 0 else 0
     
     st.subheader("📊 나의 자금 현황 (실시간)")
-    m1, m2, m3 = st.columns(3)
-    with m1:
-        st.metric(label="1회차 투자금", value=f"${one_shot_limit:.1f}", delta=f"{split_count}분할")
-    with m2:
-        # 남은 돈 색깔 표시 (마이너스면 빨간색 경고)
-        st.metric(label="남은 총알 (매수 가능)", value=f"${remain_money:,.0f}")
-    with m3:
-        st.metric(label="현재 진행률", value=f"{progress_rate:.1f}%", delta=f"투입: ${used_money:,.0f}")
     
+    # 4개 컬럼으로 나눠서 보기 좋게 배치
+    m1, m2, m3, m4 = st.columns(4)
+    with m1:
+        st.metric(label="1회차 투자금", value=f"${one_shot_limit:.0f}")
+    with m2:
+        # 여기가 핵심! (현재 회차 표시)
+        st.metric(label="현재 진행", value=f"{current_round:.1f}회차", delta=f"총 {split_count}회")
+    with m3:
+        st.metric(label="남은 총알", value=f"${remain_money:,.0f}")
+    with m4:
+        st.metric(label="진행률", value=f"{progress_pct:.1f}%")
+        
     st.divider()
 
 # --- [5] 결과 계산 버튼 ---
