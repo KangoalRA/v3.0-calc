@@ -10,6 +10,12 @@ st.sidebar.header("⚙️ 기본 설정")
 total_capital = st.sidebar.number_input("총 투자원금 ($)", value=3700, step=100)
 split_count = st.sidebar.number_input("설정 분할 횟수 (회)", value=40, step=1)
 
+# 폭락 기준 설정 (형님이 원하신 기능!)
+st.sidebar.markdown("---")
+st.sidebar.header("📉 폭락(Deep) 기준 설정")
+deep_pct = st.sidebar.slider("평단가 대비 몇 % 하락 시?", 5, 30, 15) # 기본 15%
+deep_ratio = 1 - (deep_pct / 100)
+
 st.sidebar.markdown("---")
 st.sidebar.header("📂 엑셀 파일 업로드")
 uploaded_file = st.sidebar.file_uploader("엑셀(.xlsx)을 올려주세요", type=['xlsx'])
@@ -75,35 +81,43 @@ if st.button("🚀 계산하기", type="primary"):
     
     # 가격 계산
     loc_buy_price = real_avg if real_avg > 0 else cur_price
-    sell_price_10 = real_avg * 1.10  # 10% 수익
-    sell_price_5 = real_avg * 1.05   # 5% 수익
+    loc_deep_price = real_avg * deep_ratio # 폭락 줍줍 가격 (설정값 반영)
     
-    # 수량 계산 (소수점 버림)
-    qty_quarter = math.floor(real_qty * 0.25) # 쿼터(1/4)
-    qty_half = math.floor(real_qty * 0.5)     # 반(1/2)
-    qty_all = real_qty                        # 전량
+    sell_price_10 = real_avg * 1.10
+    sell_price_5 = real_avg * 1.05
     
-    # 1. 매수 섹션
+    # 수량 계산
+    qty_quarter = math.floor(real_qty * 0.25)
+    qty_half = math.floor(real_qty * 0.5)
+    qty_all = real_qty
+    
+    # 1. 매수 섹션 (여기가 바뀌었습니다!)
     st.subheader("🔴 매수 전략 (Buy)")
-    b1, b2 = st.columns(2)
-    with b1:
-        st.info(f"**기본 LOC 매수**")
-        st.write(f"가격: **${loc_buy_price:.2f}**")
-        st.write(f"수량: **{buy_cnt}주**")
-    with b2:
-        # 하락장 대비 (평단보다 낮을 때)
+    
+    col_buy1, col_buy2 = st.columns(2)
+    
+    # [왼쪽] 기본 매수
+    with col_buy1:
+        st.info(f"**1️⃣ 기본 LOC 매수**")
+        st.metric(label="매수 가격 (평단가)", value=f"${loc_buy_price:.2f}")
+        st.write(f"👉 **{buy_cnt}주** 주문")
         if cur_price < real_avg:
-            st.warning(f"📉 **현재가가 평단보다 낮습니다!**")
-            st.write("규칙대로 정량 매수 진행")
+             st.caption("📉 현재 평단 이하! 필승 매수 구간")
         else:
-            st.write("평단 이하 매수 대기 중...")
+             st.caption("🛡️ 평단가 방어 매수")
+
+    # [오른쪽] 대폭락 줍줍 (형님이 원하신 거!)
+    with col_buy2:
+        st.warning(f"**2️⃣ 대폭락 줍줍 ({deep_pct}% 하락)**")
+        st.metric(label="지하실 가격", value=f"${loc_deep_price:.2f}")
+        st.write(f"👉 **{buy_cnt}주** 추가 주문 (선택)")
+        st.caption("🌪️ 혹시 모를 떡락에 걸어두는 보험")
 
     st.markdown("---")
 
-    # 2. 매도 섹션 (형님이 원하신 쿼터/반/전량!)
+    # 2. 매도 섹션
     st.subheader("🔵 매도 전략 (Sell Options)")
     
-    # 탭으로 깔끔하게 정리
     tab1, tab2, tab3 = st.tabs(["💰 10% (전량/반)", "💵 5% (쿼터/반)", "📋 전체 보기"])
     
     with tab1:
@@ -119,7 +133,6 @@ if st.button("🚀 계산하기", type="primary"):
         c_sell4.metric("쿼터 매도(25%)", f"{qty_quarter}주")
         
     with tab3:
-        # 표로 한눈에 보기
         data = {
             "구분": ["전량(100%)", "반(50%)", "쿼터(25%)"],
             "10% 수익 가격": [f"${sell_price_10:.2f}"] * 3,
@@ -130,4 +143,4 @@ if st.button("🚀 계산하기", type="primary"):
         st.table(pd.DataFrame(data))
 
     if real_qty < 4:
-        st.caption("※ 보유 수량이 4주 미만이라 쿼터/반 계산이 0으로 보일 수 있습니다. (정상입니다)")
+        st.caption("※ 보유 수량이 4주 미만이라 쿼터/반 계산이 0으로 보일 수 있습니다.")
