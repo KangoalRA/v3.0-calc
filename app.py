@@ -1,182 +1,141 @@
 import streamlit as st
 import pandas as pd
-import math
 
-# --- [1] 페이지 기본 설정 ---
-st.set_page_config(page_title="무매법V3 마스터", page_icon="💰", layout="wide")
-st.title("💰 무한매수법 V3.0 작전상황판")
+# 페이지 설정
+st.set_page_config(page_title="무한매수법 대시보드", layout="wide")
 
-# --- [2] 사이드바: 자금 및 설정 ---
-st.sidebar.header("⚙️ 내 자금 설정")
-total_capital = st.sidebar.number_input("총 투자원금 ($)", value=10000, step=100)
-split_count = st.sidebar.number_input("설정 분할 횟수 (회)", value=40, step=1)
+# --- [핵심 변경 1] 상단 배치를 위한 컨테이너 미리 선언 ---
+# 파이썬은 코드를 위에서 아래로 읽지만, Streamlit의 container를 쓰면
+# 나중에 계산된 결과를 이 '빈 그릇' 안에 채워 넣어 화면 맨 위에 띄울 수 있습니다.
+dashboard_container = st.container()
 
-# 1회 투자금 계산 (핵심 기준값)
-one_shot_limit = total_capital / split_count if split_count > 0 else 0
+st.divider() # 시각적 분리선
 
-st.sidebar.markdown("---")
-st.sidebar.header("📂 엑셀 파일 업로드")
-uploaded_file = st.sidebar.file_uploader("엑셀(.xlsx)을 올려주세요", type=['xlsx'])
+# --- 2. 데이터 입력 섹션 (화면 중간) ---
+st.header("📝 오늘 데이터 입력")
 
-# 변수 초기화
-default_avg = 0.0
-default_qty = 0
+col_input1, col_input2, col_input3 = st.columns(3)
 
-# 엑셀 읽기
-if uploaded_file:
-    try:
-        df = pd.read_excel(uploaded_file, header=3)
-        df = df.dropna(subset=['날짜'])
-        if not df.empty:
-            last_row = df.iloc[-1]
-            try:
-                default_avg = float(last_row.get('평균단가', last_row.get('평단가', 0)))
-                default_qty = int(last_row.get('보유수량', last_row.get('수량', 0)))
-                st.sidebar.success(f"✅ 데이터 로드 완료! ({default_qty}주)")
-            except:
-                st.sidebar.warning("⚠️ 엑셀 데이터 확인 필요")
-    except Exception as e:
-        st.error(f"엑셀 읽기 실패: {e}")
+with col_input1:
+    current_price = st.number_input("현재가 (프리장/실시간 $)", value=55.36, step=0.01, format="%.2f")
 
-# =========================================================
-# [3] 상단 대시보드 (형님이 원하신 대로 맨 위로 이동!)
-# =========================================================
+with col_input2:
+    my_avg_price = st.number_input("내 평단가 ($)", value=54.20, step=0.01, format="%.2f")
 
-# 나중에 입력을 받아야 채워지므로, 일단 빈 그릇(Container)을 만들어 둡니다.
-dashboard_placeholder = st.container()
+with col_input3:
+    holdings = st.number_input("보유 수량 (개)", value=1, step=1)
 
-# =========================================================
-# [4] 데이터 입력 (중단)
-# =========================================================
-st.markdown("### 📝 오늘 데이터 입력")
-c1, c2, c3 = st.columns(3)
+col_input4, col_input5, col_input6 = st.columns(3)
+with col_input4:
+    daily_base_qty = st.number_input("오늘 기본 매수 수량 (개)", value=1, step=1, help="평단 아래일 때 LOC 매수할 기본 수량")
 
-with c1:
-    cur_price = st.number_input("현재가 (프리장/실시간 $)", value=0.0, step=0.01, format="%.2f")
-with c2:
-    real_avg = st.number_input("내 평단가 ($)", value=default_avg, step=0.01, format="%.2f")
-with c3:
-    real_qty = st.number_input("보유 수량 (개)", value=default_qty, step=1)
+with col_input5:
+    one_time_invest = st.number_input("1회 투자금 ($)", value=74.0, step=1.0, help="한 번 매수 시 사용할 최대 가용 금액")
+    
+with col_input6:
+    total_seed = st.number_input("남은 총알 (예수금 $)", value=3646.0, step=10.0)
 
-# 매수 수량 자동 계산 (1회차 금액 / 현재가)
-calc_buy_qty = 0
-if cur_price > 0:
-    calc_buy_qty = int(one_shot_limit // cur_price)
-    if calc_buy_qty < 1: calc_buy_qty = 1 # 최소 1주는 사야 함
+# --- 계산 로직 ---
+total_purchase_amt = my_avg_price * holdings
+current_eval_amt = current_price * holdings
+eval_profit = current_eval_amt - total_purchase_amt
+profit_rate = (eval_profit / total_purchase_amt) * 100 if total_purchase_amt > 0 else 0
+burn_rate = (one_time_invest / total_seed) * 100 if total_seed > 0 else 0
 
-# 수량 입력칸
-st.caption(f"💡 1회 투자금(${one_shot_limit:.1f}) 기준, 현재가로 약 {calc_buy_qty}주 매수 가능")
-buy_cnt = st.number_input("오늘 기본 매수 수량 (개)", value=calc_buy_qty, step=1)
+# --- [핵심 변경 1 적용] 내 계좌 실시간 평가 (화면 최상단 컨테이너에 내용 채우기) ---
+with dashboard_container:
+    st.title("📊 내 계좌 실시간 평가")
+    
+    m1, m2, m3 = st.columns(3)
+    m1.metric("총 매수금액", f"${total_purchase_amt:,.2f}")
+    m2.metric("현재 평가금액", f"${current_eval_amt:,.2f}")
+    m3.metric("평가 손익", f"${eval_profit:,.2f}", f"{profit_rate:.2f}%")
+    
+    # 진행 상황 바
+    st.info(f"🔄 현재 진행 상황: 자금 소진율 {burn_rate:.1f}%")
+    
+    k1, k2, k3 = st.columns(3)
+    k1.metric("📌 1회 투자금 한도", f"${one_time_invest:,.0f}")
+    k2.metric("💰 남은 총알", f"${total_seed:,.0f}")
+    k3.metric("📉 자금 소진율", f"{burn_rate:.1f}%")
 
+# --- 작전 실행 버튼 ---
 st.markdown("---")
-
-# =========================================================
-# [5] 대시보드 채우기 (입력값 바탕으로 계산 후 위쪽 그릇에 담기)
-# =========================================================
-with dashboard_placeholder:
-    if real_qty > 0 and cur_price > 0:
-        total_invested = real_avg * real_qty  # 총 매수금
-        total_eval = cur_price * real_qty     # 총 평가금
-        profit_loss = total_eval - total_invested # 평가손익
-        profit_pct = (profit_loss / total_invested) * 100 # 수익률
-
-        st.subheader("📊 내 계좌 & 자금 현황")
-        
-        # 1. 계좌 상태 (Red/Blue)
-        k1, k2, k3 = st.columns(3)
-        k1.metric("총 매수금액", f"${total_invested:,.2f}")
-        k2.metric("현재 평가금액", f"${total_eval:,.2f}")
-        k3.metric("평가 손익", f"${profit_loss:,.2f}", f"{profit_pct:.2f}%")
-        
-        # 2. 자금 관리 (진행 상황)
-        used_money = real_avg * real_qty
-        remain_money = total_capital - used_money
-        current_round = used_money / one_shot_limit if one_shot_limit > 0 else 0.0
-        progress_pct = (used_money / total_capital) * 100 if total_capital > 0 else 0
-        
-        # 스타일링 박스
-        st.info(f"💾 **현재 진행: {current_round:.1f}회차** (총 {split_count}회 중)")
-        
-        s1, s2, s3 = st.columns(3)
-        s1.metric("💸 1회 투자금 (하루 예산)", f"${one_shot_limit:,.0f}")
-        s2.metric("💰 남은 총알", f"${remain_money:,.0f}")
-        s3.metric("📈 자금 소진율", f"{progress_pct:.1f}%")
-        
-        st.divider() # 구분선
-    else:
-        # 데이터가 없을 때 보이는 안내문
-        st.info("👆 아래에 **현재가**와 **평단가**를 입력하면 상단에 계좌 현황이 표시됩니다.")
-
-# =========================================================
-# [6] 작전 실행 및 결과표
-# =========================================================
 if st.button("🚀 작전 실행 (계산하기)", type="primary", use_container_width=True):
     
-    loc_buy_price = real_avg if real_avg > 0 else cur_price
-    sell_price_10 = real_avg * 1.10
+    st.subheader("🔴 매수 작전 (LOC Buy)")
     
-    # [A] 매수 작전
-    st.header("🔴 매수 작전 (LOC Buy)")
-    col_buy1, col_buy2 = st.columns([1, 1.5])
+    col_def, col_crash = st.columns([1, 1.5])
     
-    # 1. 기본 매수
-    with col_buy1:
-        st.subheader("1️⃣ 기본 매수")
-        st.write(f"하루 예산(${one_shot_limit:.0f})으로 살 수 있는 최대 수량")
-        st.success(f"**가격: ${loc_buy_price:.2f} (LOC)**")
-        st.success(f"**수량: {buy_cnt}주**")
+    # 1. 기본 방어 (LOC 평단 매수)
+    with col_def:
+        st.markdown("### 1️⃣ 기본 방어")
+        st.caption("내 평단가 방어용 주문입니다.")
         
-        if cur_price < real_avg:
-             st.caption("📉 현재 평단 아래! 적극 매수")
-        else:
-             st.caption("🛡️ 평단 위. 떨어지면 체결")
+        # 평단가 LOC 매수 계산
+        def_qty = daily_base_qty
+        def_amount = my_avg_price * def_qty
+        
+        # [핵심 변경 2] 기본 매수도 1회 투자금을 넘는지 체크
+        if def_amount > one_time_invest:
+            st.warning(f"⚠️ 경고: 기본 매수 금액(${def_amount:.2f})이 1회 투자금(${one_time_invest})을 초과합니다.")
+        
+        st.success(f"**가격: ${my_avg_price} (LOC)**")
+        st.success(f"**수량: {def_qty}주**")
+        st.caption("💡 평단 위 대기. 떨어지면 체결")
 
-    # 2. 수량별 매수 단가표 (형님이 원하신 기능!)
-    with col_buy2:
-        st.subheader("2️⃣ 떡락 대응 (수량 늘리기)")
-        st.write(f"하루 예산 **${one_shot_limit:.0f}**로 N주를 사려면 얼마까지 떨어져야 할까?")
+    # 2. 떡락 대응 (지하실 줍줍)
+    with col_crash:
+        st.markdown("### 2️⃣ 떡락 대응 (지하실 줍줍)")
+        st.caption("혹시 모를 폭락 시, 수량을 늘려 대응합니다. **(1회 투자금 한도 내)**")
         
-        # 표 데이터 생성 로직
-        # 현재 살 수 있는 수량(buy_cnt)부터 +5개까지 보여줌
-        table_data = []
+        drops = [0.10, 0.15, 0.20, 0.30] # 10%, 15%, 20%, 30% 하락
+        data = []
         
-        start_qty = buy_cnt + 1 # 현재 1주 살 수 있으면 2주부터 계산
-        end_qty = start_qty + 4 # 5단계 보여줌
-        
-        for q in range(start_qty, end_qty + 1):
-            # 핵심 공식: 1회 투자금 / 목표 수량 = 필요한 가격
-            target_price = one_shot_limit / q
+        for drop in drops:
+            target_price = current_price * (1 - drop)
             
-            # 하락률 계산 (현재가 대비 얼마나 빠져야 하는지)
-            if cur_price > 0:
-                drop_needed = ((target_price - cur_price) / cur_price) * 100
+            # 하락폭에 따른 추가 매수 수량 로직 (예시: 하락폭 클수록 더 많이)
+            if drop == 0.10: add_qty = 1
+            elif drop == 0.15: add_qty = 1
+            elif drop == 0.20: add_qty = 2
+            else: add_qty = 3
+            
+            planned_qty = daily_base_qty + add_qty
+            
+            # --- [핵심 변경 2] 1회 투자금 초과 방지 로직 ---
+            # 1. 일단 원래 로직대로 예상 금액 계산
+            estimated_cost = target_price * planned_qty
+            
+            # 2. 투자금을 초과한다면?
+            final_qty = planned_qty
+            note = ""
+            
+            if estimated_cost > one_time_invest:
+                # 투자금 내에서 살 수 있는 최대 수량으로 강제 조정
+                max_buyable_qty = int(one_time_invest // target_price)
+                
+                # 만약 최대 구매 가능 수량이 0개라면 아예 매수 불가
+                if max_buyable_qty == 0:
+                    final_qty = 0
+                    estimated_cost = 0.0
+                    note = "🚫 자금 부족"
+                else:
+                    final_qty = max_buyable_qty
+                    estimated_cost = target_price * final_qty
+                    note = f"⚠️ 한도 제한 (원래 {planned_qty}주)"
             else:
-                drop_needed = 0
+                # 한도 내라면 원래 계획대로
+                note = f"🔥 {planned_qty}주 (평소+{add_qty})"
+
+            # 데이터 추가
+            data.append({
+                "하락률": f"- {int(drop*100)}% 👇",
+                "LOC 매수 가격": f"${target_price:.2f}",
+                "주문 수량": note if note.startswith("⚠️") or note.startswith("🚫") else f"{final_qty}주 (평소+{add_qty})",
+                "예상 금액": f"${estimated_cost:.1f}"
+            })
             
-            # 만약 타겟 가격이 현재가보다 낮을 때만 의미 있음 (당연하지만)
-            if target_price < cur_price:
-                table_data.append({
-                    "목표 수량": f"🔥 {q}주",
-                    "필요 주가": f"${target_price:.2f}",
-                    "현재가 대비": f"{drop_needed:.1f}% 👇",
-                    "총 주문금액": f"${target_price * q:.1f}" # 검산용 (거의 1회 투자금과 같음)
-                })
-        
-        if table_data:
-            st.dataframe(pd.DataFrame(table_data), hide_index=True, use_container_width=True)
-            st.caption(f"※ 주가가 위 가격까지 떨어지면, 같은 돈(${one_shot_limit:.0f})으로 더 많이(N주) 살 수 있습니다.")
-        else:
-            st.write("이미 주가가 충분히 낮아서 현재 예산으로도 많이 살 수 있습니다!")
-
-    st.markdown("---")
-
-    # [B] 매도 작전
-    st.header("🔵 매도 작전 (LOC Sell)")
-    
-    qty_all = real_qty
-    qty_half = math.floor(real_qty * 0.5)
-    
-    st.info(f"**목표가(10%): ${sell_price_10:.2f} (LOC)**")
-    c1, c2 = st.columns(2)
-    c1.metric("전량 매도(100%)", f"+ ${(sell_price_10 - real_avg)*qty_all:.2f} 수익")
-    c2.metric("절반 매도(50%)", f"+ ${(sell_price_10 - real_avg)*qty_half:.2f} 수익")
+        df = pd.DataFrame(data)
+        st.table(df)
+        st.caption("※ 모든 주문은 LOC 매수로 걸어야 안전합니다.")
